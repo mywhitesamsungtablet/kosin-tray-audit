@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const APP_VERSION = '1.03';
+  const APP_VERSION = '1.04';
   const APP_DATE = '2026-10-04';
   const APP_DEVELOPER = 'KOSIE';
 
@@ -229,9 +229,12 @@
   }
 
   /** วันที่รูปแบบเดียวทั้งรายงาน (StayReady ปน พ.ศ./ค.ศ. และถอย 1 วันเพราะแปลง UTC) — รับ 'YYYY-MM-DD' ไม่แปลงเขตเวลา */
-  function fmtDate(iso, era) {
+  const MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmtDate(iso, era, lang) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
     if (!m) return '';
+    // ภาษาอังกฤษ: "4 Oct 2026" (ค.ศ. เสมอ — ตัวเลขล้วน 4/10 ฝรั่งอ่านเป็น 10 เม.ย. ได้)
+    if (lang === 'en') return `${Number(m[3])} ${MON_EN[Number(m[2]) - 1]} ${m[1]}`;
     const y = Number(m[1]) + (era === 'BE' ? 543 : 0);
     return `${Number(m[3])}/${Number(m[2])}/${y}`;
   }
