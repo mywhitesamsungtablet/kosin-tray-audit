@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const APP_VERSION = '1.06';
+  const APP_VERSION = '1.07';
   const APP_DATE = '2026-10-04';
   const APP_DEVELOPER = 'KOSIE';
 
@@ -248,7 +248,7 @@
     return m[1] !== String(running) ? m[1] : '';
   }
 
-  /** ชื่อแผนก/ถาดในรายงาน: ภาษาอังกฤษใช้ nameEn ถ้ามี — ไม่มีก็ใช้ชื่อไทย (ไม่ปล่อยช่องว่าง) ; ภาษาไทยใช้ชื่อไทยเสมอ */
+  /** ชื่อโรงพยาบาล/แผนก/ถาดในรายงาน: ภาษาอังกฤษใช้ nameEn ถ้ามี — ไม่มีก็ใช้ชื่อไทย (ไม่ปล่อยช่องว่าง) ; ภาษาไทยใช้ชื่อไทยเสมอ */
   function nameIn(row, lang) {
     const en = String((row && row.nameEn) || '').trim();
     return lang === 'en' && en ? en : String((row && row.name) || '');

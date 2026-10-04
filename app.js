@@ -126,6 +126,7 @@
       <label>ลูกค้า (โรงพยาบาล)</label>
       <select id="cust"><option value="">— ลูกค้าใหม่ —</option>${custs.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
       <div id="newc"><label>ชื่อโรงพยาบาล * <span class="small">(ข้อมูลทดสอบให้ขึ้นต้น SIM-)</span></label><input id="cname">
+        <label>ชื่อภาษาอังกฤษ <span class="small">(ใช้ในรายงานภาษาอังกฤษ — เว้นได้)</span></label><input id="cnameen" placeholder="e.g. Siriraj Hospital" lang="en">
         <div class="row"><div class="grow"><label>รหัสสถานพยาบาล</label><input id="ccode"></div><div class="grow"><label>จังหวัด</label><input id="cprov"></div></div></div>
       <div class="row"><div class="grow"><label>วันที่นัดตรวจ</label><input id="pd" type="date" value="${today()}"></div>
         <div class="grow"><label>ประมาณจำนวนถาด</label><input id="et" type="number" min="0" inputmode="numeric"></div>
@@ -138,7 +139,7 @@
       if (!cid) {
         const name = $('#cname').value.trim();
         if (!name) return $('#e').innerHTML = '<div class="err">ต้องใส่ชื่อโรงพยาบาล</div>';
-        cid = (await DB.put('customers', { name, hcode: $('#ccode').value.trim(), province: $('#cprov').value.trim() }, WHO)).id;
+        cid = (await DB.put('customers', { name, nameEn: $('#cnameen').value.trim(), hcode: $('#ccode').value.trim(), province: $('#cprov').value.trim() }, WHO)).id;
       }
       const a = await DB.put('audits', { customerId: cid, plannedDate: $('#pd').value, estTrays: Number($('#et').value) || 0,
         estItems: Number($('#ei').value) || 0, status: 'กำลังตรวจ', inspector: WHO }, WHO);
@@ -156,8 +157,14 @@
     const times = tr.items.flatMap(i => [i.createdAt, i.updatedAt]).filter(Boolean).sort();
     const mins = times.length ? Math.round((new Date(times.at(-1)) - new Date(times[0])) / 60000) : 0;
     let html = `<div class="crumb"><a href="#/">รายการ audit</a></div>
-      <div class="row"><h1 class="grow">${esc(c.name)}</h1>${Logic.isTestCustomer(c.name) ? '<span class="badge gray">ทดสอบ</span>' : ''}<span class="badge ${locked ? 'lock' : 'ok'}">${esc(a.status)}</span></div>
-      ${lockedNote(a)}
+      <div class="row"><h1 class="grow">${esc(c.name)}</h1>${Logic.isTestCustomer(c.name) ? '<span class="badge gray">ทดสอบ</span>' : ''}<span class="badge ${locked ? 'lock' : 'ok'}">${esc(a.status)}</span>${locked ? '' : '<button class="sm" id="edc">✎ แก้ไขข้อมูล รพ.</button>'}</div>
+      ${c.nameEn ? `<div class="small muted">EN: ${esc(c.nameEn)}</div>` : ''}${lockedNote(a)}
+      ${locked ? '' : `<div class="card" id="eccard" hidden><b>แก้ไขข้อมูลโรงพยาบาล</b> <span class="small muted">(ใช้ร่วมกับ audit อื่นของ รพ. นี้)</span>
+        <label>ชื่อโรงพยาบาล * <span class="small">(ข้อมูลทดสอบให้ขึ้นต้น SIM-)</span></label><input id="ec-n" value="${esc(c.name || '')}">
+        <label>ชื่อภาษาอังกฤษ <span class="small">(ใช้ในรายงานภาษาอังกฤษ — เว้นได้)</span></label><input id="ec-ne" value="${esc(c.nameEn || '')}" placeholder="e.g. Siriraj Hospital" lang="en">
+        <div class="row"><div class="grow"><label>รหัสสถานพยาบาล</label><input id="ec-h" value="${esc(c.hcode || '')}"></div><div class="grow"><label>จังหวัด</label><input id="ec-p" value="${esc(c.province || '')}"></div></div>
+        <div id="ec-e"></div>
+        <div class="row" style="margin-top:10px"><button class="pri" id="ec-s">บันทึก</button><button id="ec-x">ยกเลิก</button></div></div>`}
       <div class="small muted">นัดตรวจ ${esc(a.plannedDate)} · ผู้ตรวจ ${esc(a.inspector)} · ช่วงเวลาบันทึกชิ้นงาน ~${mins} นาที</div>
       <div class="stats" style="margin-top:10px">
         <div><b>${k.total}</b>ชิ้นทั้งหมด</div><div><b>${k.ok}</b>ใช้ได้ดี</div><div><b>${k.damaged}</b>ชำรุด</div>
@@ -184,6 +191,17 @@
         ${locked ? '' : '<button class="danger" id="dela">ลบ audit</button>'}</div><div id="ae"></div>`;
     V.innerHTML = html;
     if (!locked) {
+      $('#edc').onclick = () => { $('#eccard').hidden = false; $('#edc').hidden = true; $('#ec-ne').focus(); };
+      $('#ec-x').onclick = () => route();
+      $('#ec-s').onclick = async () => {
+        const name = $('#ec-n').value.trim(); if (!name) return $('#ec-e').innerHTML = '<div class="err">ต้องใส่ชื่อโรงพยาบาล</div>';
+        // เปลี่ยนชื่อแล้วสถานะ "ข้อมูลทดสอบ" เปลี่ยนตาม (กฎ SIM-) → บอกก่อนบันทึก
+        if (Logic.isTestCustomer(name) !== Logic.isTestCustomer(c.name) &&
+          !confirm(Logic.isTestCustomer(name) ? 'ชื่อใหม่ขึ้นต้น SIM- → audit ของ รพ. นี้จะกลายเป็น "ข้อมูลทดสอบ" (รายงานมีลายน้ำ) ยืนยัน?'
+            : 'ชื่อใหม่ไม่ขึ้นต้น SIM- → audit ของ รพ. นี้จะกลายเป็น "ข้อมูลจริง" ยืนยัน?')) return;
+        Object.assign(c, { name, nameEn: $('#ec-ne').value.trim(), hcode: $('#ec-h').value.trim(), province: $('#ec-p').value.trim() });
+        await DB.put('customers', c, WHO); toast('บันทึกแล้ว'); route();
+      };
       $('#showd').onclick = () => { $('#addd').hidden = false; $('#showd').hidden = true; $('#dn').focus(); };
       $('#dsave').onclick = async () => {
         const name = $('#dn').value.trim(); if (!name) return $('#de').innerHTML = '<div class="err">ต้องใส่ชื่อแผนก</div>';
@@ -518,7 +536,7 @@
   async function reportView(id) {
     const R = await reportData(id);
     const o = Object.assign({ refNo: R.a.id, contact: '', era: 'BE', lang: 'th', noPrices: !P.price.size, photos: true }, R.a.reportOpts || {});
-    const noEn = Logic.missingEnNames(R.tr.depts).map(n => 'แผนก ' + n).concat(Logic.missingEnNames(R.tr.trays).map(n => 'ถาด ' + n));
+    const noEn = Logic.missingEnNames([R.c]).map(n => 'โรงพยาบาล ' + n).concat(Logic.missingEnNames(R.tr.depts).map(n => 'แผนก ' + n)).concat(Logic.missingEnNames(R.tr.trays).map(n => 'ถาด ' + n));
     const gate = Logic.reportGate(R.rows.map(r => ({ label: `${r.t.name} › ${r.i.productCode}${r.i.serial ? ' ' + r.i.serial : ''}`, line: r.line })), { noPrices: o.noPrices });
     V.innerHTML = `<div class="crumb noprint"><a href="#/audit/${id}">กลับไป audit</a></div>
       <div class="noprint"><h1>รายงาน — ${esc(R.c.name)}</h1>
@@ -529,7 +547,7 @@
         <label class="check"><input type="checkbox" id="o-np" ${o.noPrices ? 'checked' : ''}> ออกรายงานแบบไม่มีราคา ${P.price.size ? '' : '<span class="small muted">(ยังไม่ได้นำเข้าไฟล์ราคา)</span>'}</label>
         <label class="check"><input type="checkbox" id="o-ph" ${o.photos ? 'checked' : ''}> ใส่รูปในรายงาน</label>
         ${o.lang === 'en' ? '<p class="small muted">หมายเหตุ/เหตุผลที่ช่างพิมพ์เอง จะแสดงตามที่พิมพ์ (ไม่แปล) — รายงานมีบรรทัดแจ้งให้ผู้อ่านทราบ</p>' : ''}
-        ${o.lang === 'en' && noEn.length ? `<p class="banner">⚠ ยังไม่มีชื่อภาษาอังกฤษ ${noEn.length} รายการ — รายงานจะใช้ชื่อไทยแทน: ${esc(noEn.join(', '))} (แก้ได้ที่ปุ่ม ✎ แก้ไข ในหน้าแผนก/ถาด)</p>` : ''}
+        ${o.lang === 'en' && noEn.length ? `<p class="banner">⚠ ยังไม่มีชื่อภาษาอังกฤษ ${noEn.length} รายการ — รายงานจะใช้ชื่อไทยแทน: ${esc(noEn.join(', '))} (แก้ได้ที่ปุ่ม ✎ แก้ไข ในหน้า audit / แผนก / ถาด)</p>` : ''}
         <div class="row"><button class="pri" id="o-show" ${gate.ok ? '' : 'disabled'}>📄 ดูรายงาน / บันทึก PDF</button>
           <button id="o-xls" ${gate.ok ? '' : 'disabled'}>⬇ ส่งออก Excel</button></div>
         ${gate.errors.length ? `<div class="err">ยังออกรายงานไม่ได้<ul>${gate.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
@@ -560,7 +578,7 @@
     let h = `<article class="report" lang="${L}">${test ? `<div class="r-water">${T.test}</div>` : ''}
       <header class="r-head"><div><b>${T.company}</b><br><span class="small">${T.title}</span></div>
         <div class="r-ref">${T.ref} ${esc(o.refNo)}<br>${T.printed} ${esc(printed)}${Logic.isLocked(R.a) ? '' : `<br><b class="r-draft">${T.draft}</b>`}</div></header>
-      <h2 class="r-title">${esc(R.c.name)}</h2>
+      <h2 class="r-title">${esc(Logic.nameIn(R.c, L))}</h2>
       <table class="r-kv"><tr><th>${T.dept}</th><td>${esc(depts)}</td><th>${T.date}</th><td>${esc(date)}</td></tr>
         <tr><th>${T.inspector}</th><td>${esc(R.a.inspector)}</td><th>${T.hcode}</th><td>${esc(R.c.hcode || '-')}</td></tr></table>
       ${o.contact ? `<p>${T.dear} ${esc(o.contact)}</p>` : ''}
@@ -608,7 +626,7 @@
     const L = o.lang === 'en' ? 'en' : 'th', en = L === 'en', pr = !o.noPrices, A = ACTION[L];
     const yes = en ? 'Yes' : 'ใช่', vat = Logic.withVat(R.tot.required);
     const k = (th, eng) => en ? eng : th;
-    const summary = [[k('หัวข้อ', 'Item'), k('ค่า', 'Value')], [k('ลูกค้า', 'Customer'), R.c.name], [k('รหัสสถานพยาบาล', 'Facility code'), R.c.hcode || ''],
+    const summary = [[k('หัวข้อ', 'Item'), k('ค่า', 'Value')], [k('ลูกค้า', 'Customer'), Logic.nameIn(R.c, L)], [k('รหัสสถานพยาบาล', 'Facility code'), R.c.hcode || ''],
       [k('แผนก', 'Departments'), R.tr.depts.map(d => Logic.nameIn(d, L)).join(', ')], [k('วันที่ตรวจ', 'Inspection date'), Logic.fmtDate(R.a.plannedDate, o.era, L)],
       [k('ผู้ตรวจ', 'Inspector'), R.a.inspector], [k('เลขอ้างอิง', 'Reference'), o.refNo],
       [k('สถานะ audit', 'Audit status'), en ? (Logic.isLocked(R.a) ? 'Closed' : 'Open (draft)') : R.a.status],
@@ -637,9 +655,9 @@
       { name: en ? 'Summary' : 'สรุป', rows: summary, widths: [34, 50] },
       { name: en ? 'Items' : 'รายชิ้น', rows: items, widths: [18, 24, 10, 6, 14, 40, 30, 14, 10, 8, 50, 22, 24, 24, 24, 24, 8, 16, 14, 18, 8, 10, 30, 16] },
       { name: en ? 'Findings' : 'ตำหนิ', rows: dmg, widths: [24, 14, 16, 40, 22, 30, 16] }],
-      { title: `KOSIN Tray Audit — ${R.c.name}`, creator: Logic.APP_DEVELOPER, description: `KOSIN Tray Audit v${Logic.APP_VERSION} ${R.a.id} (${L})` });
+      { title: `KOSIN Tray Audit — ${Logic.nameIn(R.c, L)}`, creator: Logic.APP_DEVELOPER, description: `KOSIN Tray Audit v${Logic.APP_VERSION} ${R.a.id} (${L})` });
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob);
-    aEl.download = `TrayAudit_${R.c.name.replace(/[\\/:*?"<>|]/g, '_')}_${R.a.plannedDate || ''}_${L.toUpperCase()}.xlsx`;
+    aEl.download = `TrayAudit_${Logic.nameIn(R.c, L).replace(/[\\/:*?"<>|]/g, '_')}_${R.a.plannedDate || ''}_${L.toUpperCase()}.xlsx`;
     document.body.appendChild(aEl); aEl.click(); aEl.remove();
     toast(en ? 'ส่งออก Excel (English) แล้ว' : 'ส่งออก Excel แล้ว');
   }
