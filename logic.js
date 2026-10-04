@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const APP_VERSION = '1.05';
+  const APP_VERSION = '1.06';
   const APP_DATE = '2026-10-04';
   const APP_DEVELOPER = 'KOSIE';
 
@@ -248,10 +248,20 @@
     return m[1] !== String(running) ? m[1] : '';
   }
 
+  /** ชื่อแผนก/ถาดในรายงาน: ภาษาอังกฤษใช้ nameEn ถ้ามี — ไม่มีก็ใช้ชื่อไทย (ไม่ปล่อยช่องว่าง) ; ภาษาไทยใช้ชื่อไทยเสมอ */
+  function nameIn(row, lang) {
+    const en = String((row && row.nameEn) || '').trim();
+    return lang === 'en' && en ? en : String((row && row.name) || '');
+  }
+  /** แผนก/ถาดที่ยังไม่มีชื่ออังกฤษ — หน้ารายงานอังกฤษเตือน (ไม่ห้ามออกรายงาน) */
+  function missingEnNames(rows) {
+    return rows.filter(r => !String(r.nameEn || '').trim()).map(r => r.name);
+  }
+
   return {
     APP_VERSION, APP_DATE, APP_DEVELOPER, OK, CP, MS,
     normCode, isTestCustomer, defaultLevel, damageChoices, itemEvaluation, itemRecommendation,
     validateItem, counts, trayStatus, canCloseAudit, isLocked, reopenAudit, templateFrom, estimateWarnings,
-    actionOf, costLine, reportGate, totals, fmtDate, withVat, VAT_RATE, updateAvailable
+    actionOf, costLine, reportGate, totals, fmtDate, withVat, VAT_RATE, updateAvailable, nameIn, missingEnNames
   };
 });

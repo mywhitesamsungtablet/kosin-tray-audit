@@ -172,6 +172,7 @@
     }
     html += `</ul>${locked ? '' : `<div class="card" id="addd" ${q.add ? '' : 'hidden'}><b>เพิ่มแผนก</b>
         <label>ชื่อแผนก *</label><input id="dn" placeholder="เช่น ห้องผ่าตัด (OR)">
+        <label>ชื่อภาษาอังกฤษ <span class="small">(ใช้ในรายงานภาษาอังกฤษ — เว้นได้)</span></label><input id="dne" placeholder="e.g. Operating Room (OR)" lang="en">
         <div class="row"><div class="grow"><label>ผู้ติดต่อ</label><input id="dc"></div><div class="grow"><label>เบอร์โทร</label><input id="dp" inputmode="tel"></div></div>
         <label>ตึก / ชั้น</label><input id="dl"><div id="de"></div>
         <div class="row" style="margin-top:10px"><button class="pri" id="dsave">บันทึก + เพิ่มถาด</button></div></div>
@@ -186,7 +187,7 @@
       $('#showd').onclick = () => { $('#addd').hidden = false; $('#showd').hidden = true; $('#dn').focus(); };
       $('#dsave').onclick = async () => {
         const name = $('#dn').value.trim(); if (!name) return $('#de').innerHTML = '<div class="err">ต้องใส่ชื่อแผนก</div>';
-        const d = await DB.put('departments', { auditId: id, name, contact: $('#dc').value.trim(), phone: $('#dp').value.trim(), location: $('#dl').value.trim() }, WHO);
+        const d = await DB.put('departments', { auditId: id, name, nameEn: $('#dne').value.trim(), contact: $('#dc').value.trim(), phone: $('#dp').value.trim(), location: $('#dl').value.trim() }, WHO);
         go(`#/dept/${d.id}?add=1`);
       };
       V.querySelectorAll('[data-deld]').forEach(b => b.onclick = async () => { const d = await DB.get('departments', b.dataset.deld); if (await confirmDelete('departments', d.id, d.name)) route(); });
@@ -211,15 +212,15 @@
       const na = await DB.put('audits', { customerId: a.customerId, plannedDate: today(), estTrays: tr.trays.length, estItems: tr.items.length,
         status: 'กำลังตรวจ', inspector: WHO, previousAuditId: id }, WHO);
       for (const d of tr.depts) {
-        const nd = await DB.put('departments', { auditId: na.id, name: d.name, contact: d.contact, phone: d.phone, location: d.location }, WHO);
-        for (const t of tr.trays.filter(t => t.departmentId === d.id)) await copyTray(t, nd.id, t.name, t.setId);
+        const nd = await DB.put('departments', { auditId: na.id, name: d.name, nameEn: d.nameEn || '', contact: d.contact, phone: d.phone, location: d.location }, WHO);
+        for (const t of tr.trays.filter(t => t.departmentId === d.id)) await copyTray(t, nd.id, t.name, t.setId, t.nameEn || '');
       }
       toast('สร้างรอบใหม่แล้ว'); go(`#/audit/${na.id}`);
     };
   }
 
-  async function copyTray(t, deptId, name, setId) {
-    const nt = await DB.put('trays', { departmentId: deptId, name, setId, copiedFrom: t.id }, WHO);
+  async function copyTray(t, deptId, name, setId, nameEn) {
+    const nt = await DB.put('trays', { departmentId: deptId, name, nameEn: nameEn || '', setId, copiedFrom: t.id }, WHO);
     for (const i of await DB.by('items', 'trayId', t.id)) await DB.put('items', Object.assign(Logic.templateFrom(i), { trayId: nt.id }), WHO);
     return nt;
   }
@@ -230,7 +231,15 @@
     const locked = Logic.isLocked(a);
     const trays = await DB.by('trays', 'departmentId', id);
     let html = `<div class="crumb"><a href="#/">รายการ audit</a> › <a href="#/audit/${a.id}">${esc(c.name)}</a></div>
-      <h1>${esc(d.name)}</h1>${lockedNote(a)}<h2>ถาด</h2><ul class="list">`;
+      <div class="row"><h1 class="grow">${esc(d.name)}</h1>${locked ? '' : '<button class="sm" id="edd">✎ แก้ไขแผนก</button>'}</div>
+      ${d.nameEn ? `<div class="small muted">EN: ${esc(d.nameEn)}</div>` : ''}${lockedNote(a)}
+      ${locked ? '' : `<div class="card" id="edcard" hidden><b>แก้ไขแผนก</b>
+        <label>ชื่อแผนก *</label><input id="ed-n" value="${esc(d.name)}">
+        <label>ชื่อภาษาอังกฤษ <span class="small">(ใช้ในรายงานภาษาอังกฤษ — เว้นได้)</span></label><input id="ed-ne" value="${esc(d.nameEn || '')}" placeholder="e.g. Operating Room (OR)" lang="en">
+        <div class="row"><div class="grow"><label>ผู้ติดต่อ</label><input id="ed-c" value="${esc(d.contact || '')}"></div><div class="grow"><label>เบอร์โทร</label><input id="ed-p" inputmode="tel" value="${esc(d.phone || '')}"></div></div>
+        <label>ตึก / ชั้น</label><input id="ed-l" value="${esc(d.location || '')}"><div id="ed-e"></div>
+        <div class="row" style="margin-top:10px"><button class="pri" id="ed-s">บันทึก</button><button id="ed-x">ยกเลิก</button></div></div>`}
+      <h2>ถาด</h2><ul class="list">`;
     for (const t of trays) {
       const items = await DB.by('items', 'trayId', t.id);
       const st = Logic.trayStatus(items);
@@ -241,22 +250,32 @@
     }
     html += `</ul>${locked ? '' : `<div class="card" id="addt" ${q.add ? '' : 'hidden'}><b>เพิ่มถาด</b>
       <label>ชื่อถาด *</label><input id="tn" placeholder="เช่น ชุดส่องกล้องช่องท้อง">
+      <label>ชื่อภาษาอังกฤษ <span class="small">(ใช้ในรายงานภาษาอังกฤษ — เว้นได้)</span></label><input id="tne" placeholder="e.g. Laparoscopy set" lang="en">
       <label>Set ID (เลขชุด/เลขถาดของ รพ.)</label><input id="ts"><div id="te"></div>
       <div class="row" style="margin-top:10px"><button class="pri" id="tsave">บันทึก + เพิ่มชิ้น</button></div></div>
       <button id="showt" ${q.add ? 'hidden' : ''}>＋ เพิ่มถาด</button>`}`;
     V.innerHTML = html;
     if (locked) return;
+    $('#edd').onclick = () => { $('#edcard').hidden = false; $('#edd').hidden = true; $('#ed-ne').focus(); };
+    $('#ed-x').onclick = () => route();
+    $('#ed-s').onclick = async () => {
+      const name = $('#ed-n').value.trim(); if (!name) return $('#ed-e').innerHTML = '<div class="err">ต้องใส่ชื่อแผนก</div>';
+      Object.assign(d, { name, nameEn: $('#ed-ne').value.trim(), contact: $('#ed-c').value.trim(), phone: $('#ed-p').value.trim(), location: $('#ed-l').value.trim() });
+      await DB.put('departments', d, WHO); toast('บันทึกแล้ว'); route();
+    };
     $('#showt').onclick = () => { $('#addt').hidden = false; $('#showt').hidden = true; $('#tn').focus(); };
     $('#tsave').onclick = async () => {
       const name = $('#tn').value.trim(); if (!name) return $('#te').innerHTML = '<div class="err">ต้องใส่ชื่อถาด</div>';
-      const t = await DB.put('trays', { departmentId: id, name, setId: $('#ts').value.trim() }, WHO);
+      const t = await DB.put('trays', { departmentId: id, name, nameEn: $('#tne').value.trim(), setId: $('#ts').value.trim() }, WHO);
       go(`#/item/new/${t.id}`);
     };
     V.querySelectorAll('[data-copyt]').forEach(b => b.onclick = async () => {
       const t = await DB.get('trays', b.dataset.copyt);
-      const name = prompt('ชื่อถาดใหม่ (ชิ้นทั้งหมดจะเป็นแม่แบบ ต้องตรวจใหม่)', t.name + ' (ชุดที่ 2)'); if (!name) return;
+      const dflt = t.name + ' (ชุดที่ 2)';
+      const name = prompt('ชื่อถาดใหม่ (ชิ้นทั้งหมดจะเป็นแม่แบบ ต้องตรวจใหม่)', dflt); if (!name) return;
       const setId = prompt('Set ID ของถาดใหม่', '') ?? '';
-      await copyTray(t, id, name.trim(), setId.trim()); toast('คัดลอกถาดแล้ว'); route();
+      // ใช้ชื่อตั้งต้น "(ชุดที่ 2)" → ชื่ออังกฤษตามให้ ; พิมพ์ชื่อใหม่เอง → เว้นชื่ออังกฤษไว้แก้ทีหลัง
+      await copyTray(t, id, name.trim(), setId.trim(), name.trim() === dflt && t.nameEn ? t.nameEn + ' (set 2)' : ''); toast('คัดลอกถาดแล้ว'); route();
     });
     V.querySelectorAll('[data-delt]').forEach(b => b.onclick = async () => { const t = await DB.get('trays', b.dataset.delt); if (await confirmDelete('trays', t.id, t.name)) route(); });
   }
@@ -267,7 +286,13 @@
     const locked = Logic.isLocked(a);
     const items = await DB.by('items', 'trayId', id);
     let html = `<div class="crumb"><a href="#/audit/${a.id}">${esc(c.name)}</a> › <a href="#/dept/${d.id}">${esc(d.name)}</a></div>
-      <div class="row"><h1 class="grow">${esc(t.name)}</h1><span class="small muted">Set ID ${esc(t.setId || '-')}</span></div>${lockedNote(a)}
+      <div class="row"><h1 class="grow">${esc(t.name)}</h1><span class="small muted">Set ID ${esc(t.setId || '-')}</span>${locked ? '' : '<button class="sm" id="edt">✎ แก้ไขถาด</button>'}</div>
+      ${t.nameEn ? `<div class="small muted">EN: ${esc(t.nameEn)}</div>` : ''}${lockedNote(a)}
+      ${locked ? '' : `<div class="card" id="etcard" hidden><b>แก้ไขถาด</b>
+        <label>ชื่อถาด *</label><input id="et-n" value="${esc(t.name)}">
+        <label>ชื่อภาษาอังกฤษ <span class="small">(ใช้ในรายงานภาษาอังกฤษ — เว้นได้)</span></label><input id="et-ne" value="${esc(t.nameEn || '')}" placeholder="e.g. Laparoscopy set" lang="en">
+        <label>Set ID (เลขชุด/เลขถาดของ รพ.)</label><input id="et-s" value="${esc(t.setId || '')}"><div id="et-e"></div>
+        <div class="row" style="margin-top:10px"><button class="pri" id="et-ok">บันทึก</button><button id="et-x">ยกเลิก</button></div></div>`}
       <div class="card"><b>รูปถาด</b>${locked ? '' : photoInputs('tray')}${await thumbs(id, !locked)}</div>
       <div class="row"><h2 class="grow">ชิ้นในถาด (${items.length})</h2>${locked ? '' : `<a class="btn pri" href="#/item/new/${id}">＋ เพิ่มชิ้น</a>`}</div><ul class="list">`;
     for (const i of items) {
@@ -281,6 +306,13 @@
     }
     V.innerHTML = html + '</ul>';
     if (locked) return;
+    $('#edt').onclick = () => { $('#etcard').hidden = false; $('#edt').hidden = true; $('#et-ne').focus(); };
+    $('#et-x').onclick = () => route();
+    $('#et-ok').onclick = async () => {
+      const name = $('#et-n').value.trim(); if (!name) return $('#et-e').innerHTML = '<div class="err">ต้องใส่ชื่อถาด</div>';
+      Object.assign(t, { name, nameEn: $('#et-ne').value.trim(), setId: $('#et-s').value.trim() });
+      await DB.put('trays', t, WHO); toast('บันทึกแล้ว'); route();
+    };
     V.querySelectorAll('[data-photo]').forEach(inp => inp.onchange = async () => { await addPhotos('tray', id, inp.files); route(); });
     bindPhotoButtons(route);
     V.querySelectorAll('[data-copyi]').forEach(b => b.onclick = async () => {
@@ -486,6 +518,7 @@
   async function reportView(id) {
     const R = await reportData(id);
     const o = Object.assign({ refNo: R.a.id, contact: '', era: 'BE', lang: 'th', noPrices: !P.price.size, photos: true }, R.a.reportOpts || {});
+    const noEn = Logic.missingEnNames(R.tr.depts).map(n => 'แผนก ' + n).concat(Logic.missingEnNames(R.tr.trays).map(n => 'ถาด ' + n));
     const gate = Logic.reportGate(R.rows.map(r => ({ label: `${r.t.name} › ${r.i.productCode}${r.i.serial ? ' ' + r.i.serial : ''}`, line: r.line })), { noPrices: o.noPrices });
     V.innerHTML = `<div class="crumb noprint"><a href="#/audit/${id}">กลับไป audit</a></div>
       <div class="noprint"><h1>รายงาน — ${esc(R.c.name)}</h1>
@@ -496,6 +529,7 @@
         <label class="check"><input type="checkbox" id="o-np" ${o.noPrices ? 'checked' : ''}> ออกรายงานแบบไม่มีราคา ${P.price.size ? '' : '<span class="small muted">(ยังไม่ได้นำเข้าไฟล์ราคา)</span>'}</label>
         <label class="check"><input type="checkbox" id="o-ph" ${o.photos ? 'checked' : ''}> ใส่รูปในรายงาน</label>
         ${o.lang === 'en' ? '<p class="small muted">หมายเหตุ/เหตุผลที่ช่างพิมพ์เอง จะแสดงตามที่พิมพ์ (ไม่แปล) — รายงานมีบรรทัดแจ้งให้ผู้อ่านทราบ</p>' : ''}
+        ${o.lang === 'en' && noEn.length ? `<p class="banner">⚠ ยังไม่มีชื่อภาษาอังกฤษ ${noEn.length} รายการ — รายงานจะใช้ชื่อไทยแทน: ${esc(noEn.join(', '))} (แก้ได้ที่ปุ่ม ✎ แก้ไข ในหน้าแผนก/ถาด)</p>` : ''}
         <div class="row"><button class="pri" id="o-show" ${gate.ok ? '' : 'disabled'}>📄 ดูรายงาน / บันทึก PDF</button>
           <button id="o-xls" ${gate.ok ? '' : 'disabled'}>⬇ ส่งออก Excel</button></div>
         ${gate.errors.length ? `<div class="err">ยังออกรายงานไม่ได้<ul>${gate.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
@@ -514,7 +548,7 @@
   async function reportHtml(R, o) {
     const L = o.lang === 'en' ? 'en' : 'th', T = TXT[L];
     const date = Logic.fmtDate(R.a.plannedDate, o.era, L), printed = Logic.fmtDate(today(), o.era, L);
-    const depts = R.tr.depts.map(d => d.name).join(', ');
+    const depts = R.tr.depts.map(d => Logic.nameIn(d, L)).join(', ');
     const test = Logic.isTestCustomer(R.c.name);
     const evalCount = {}; for (const r of R.rows) if (r.e) evalCount[r.e] = (evalCount[r.e] || 0) + 1;
     const pics = async (ownerId) => {
@@ -547,7 +581,7 @@
     for (const t of R.tr.trays) {
       const rs = R.rows.filter(r => r.t.id === t.id);
       const sub = Logic.totals(rs.map(r => r.line));
-      h += `<section class="r-tray"><h4>${esc(rs[0]?.d.name || '')} › ${esc(t.name)} <span class="small">Set ID ${esc(t.setId || '-')}</span></h4>${await pics(t.id)}
+      h += `<section class="r-tray"><h4>${esc(rs[0] ? Logic.nameIn(rs[0].d, L) : '')} › ${esc(Logic.nameIn(t, L))} <span class="small">Set ID ${esc(t.setId || '-')}</span></h4>${await pics(t.id)}
         <table class="r-tab"><thead><tr><th>#</th><th>${T.item}</th><th>SN / LOT</th><th>${T.result}</th><th>${T.rec}</th>${o.noPrices ? '' : `<th>${T.price}</th>`}</tr></thead><tbody>`;
       for (const r of rs) {
         const lv = level(r.e);
@@ -575,7 +609,7 @@
     const yes = en ? 'Yes' : 'ใช่', vat = Logic.withVat(R.tot.required);
     const k = (th, eng) => en ? eng : th;
     const summary = [[k('หัวข้อ', 'Item'), k('ค่า', 'Value')], [k('ลูกค้า', 'Customer'), R.c.name], [k('รหัสสถานพยาบาล', 'Facility code'), R.c.hcode || ''],
-      [k('แผนก', 'Departments'), R.tr.depts.map(d => d.name).join(', ')], [k('วันที่ตรวจ', 'Inspection date'), Logic.fmtDate(R.a.plannedDate, o.era, L)],
+      [k('แผนก', 'Departments'), R.tr.depts.map(d => Logic.nameIn(d, L)).join(', ')], [k('วันที่ตรวจ', 'Inspection date'), Logic.fmtDate(R.a.plannedDate, o.era, L)],
       [k('ผู้ตรวจ', 'Inspector'), R.a.inspector], [k('เลขอ้างอิง', 'Reference'), o.refNo],
       [k('สถานะ audit', 'Audit status'), en ? (Logic.isLocked(R.a) ? 'Closed' : 'Open (draft)') : R.a.status],
       [k('จำนวนถาด', 'Trays'), R.tr.trays.length], [k('ชิ้นทั้งหมด', 'Items'), R.k.total], [lvName('OK', L), R.k.ok], [k('ชำรุด', 'Damaged'), R.k.damaged],
@@ -592,13 +626,13 @@
         'คำแนะนำของระบบ', 'คำแนะนำที่ใช้', 'เหตุผลที่ช่างเปลี่ยน', 'ผ่านแบบมีเงื่อนไข', 'ของหาย', 'การดำเนินการ'])
       .concat(pr ? (en ? ['Price excl. VAT (THB)', 'Price source', 'Old price', 'Price hidden'] : ['ราคาก่อน VAT (บาท)', 'ที่มาราคา', 'ราคาเก่า', 'ไม่แสดงราคา']) : [])
       .concat(en ? ['Note', 'Item ID'] : ['หมายเหตุ', 'รหัสชิ้น']);
-    const items = [head].concat(R.rows.map(r => [r.d.name, r.t.name, r.t.setId || '', r.no, r.i.productCode, r.p ? (r.p[1] || TXT[L].noDesc) : '',
+    const items = [head].concat(R.rows.map(r => [Logic.nameIn(r.d, L), Logic.nameIn(r.t, L), r.t.setId || '', r.no, r.i.productCode, r.p ? (r.p[1] || TXT[L].noDesc) : '',
       grpName(r.p ? r.p[2] : M.otherGroup, L), r.i.serial || '', r.i.lot || '', r.i.mfgYear ? Number(r.i.mfgYear) : '', dmgText(r.dm, L),
       lvName(r.e, L) || TXT[L].pending, recIn(r.sysRec, L), recIn(r.rec, L), r.i.recOverrideReason || '', condIn(r.i.condPass || '', L), r.i.missing ? yes : '',
       A[r.line.action]].concat(pr ? [r.line.hidden ? '' : r.line.amount, en && r.line.source === 'ราคาซ่อม (ช่างใส่)' ? 'Repair price (technician)' : r.line.source, r.line.stale ? yes : '', r.line.hidden ? yes : ''] : [])
       .concat([r.i.comment || '', r.i.id])));
     const dmg = [en ? ['Tray', 'Code', 'Serial/LOT', 'Finding', 'Level', 'Note', 'Item ID'] : ['ถาด', 'รหัสสินค้า', 'Serial/LOT', 'ชนิดตำหนิ', 'ระดับ', 'หมายเหตุตำหนิ', 'รหัสชิ้น']]
-      .concat(R.rows.flatMap(r => r.dm.map(x => [r.t.name, r.i.productCode, r.i.serial || r.i.lot || '', dmgName(x.damageIdx, L), lvName(x.level, L), x.comment || '', r.i.id])));
+      .concat(R.rows.flatMap(r => r.dm.map(x => [Logic.nameIn(r.t, L), r.i.productCode, r.i.serial || r.i.lot || '', dmgName(x.damageIdx, L), lvName(x.level, L), x.comment || '', r.i.id])));
     const blob = XLSX.build([
       { name: en ? 'Summary' : 'สรุป', rows: summary, widths: [34, 50] },
       { name: en ? 'Items' : 'รายชิ้น', rows: items, widths: [18, 24, 10, 6, 14, 40, 30, 14, 10, 8, 50, 22, 24, 24, 24, 24, 8, 16, 14, 18, 8, 10, 30, 16] },
