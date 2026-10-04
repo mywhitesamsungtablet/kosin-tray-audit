@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const APP_VERSION = '1.01';
+  const APP_VERSION = '1.02';
   const APP_DATE = '2026-10-04';
   const APP_DEVELOPER = 'KOSIE';
 
@@ -157,9 +157,80 @@
     return w;
   }
 
+  // ------------------------------------------------------------------ ราคา (ขั้น D)
+  // ชนิดการดำเนินการ ตามระดับของคำแนะนำ (หาจากข้อความคำแนะนำ -> ระดับ ; ข้อความคำแนะนำไม่ซ้ำกันในชีตระดับ)
+  const ACTION_BY_LEVEL = { OK: 'none', CP: 'none', L1: 'optional', L2: 'repair', L3: 'repair', WR: 'replace', MS: 'replace', BR: 'replace' };
+
+  /** คำแนะนำ (ข้อความ) -> none | optional | repair | replace | unknown */
+  function actionOf(rec, levels) {
+    const l = levels.find(x => x.rec === rec);
+    return l ? (ACTION_BY_LEVEL[l.code] || 'unknown') : 'unknown';
+  }
+
+  /**
+   * ค่าใช้จ่ายของ 1 ชิ้น
+   * price = [code, ราคา, เดือนของราคา, ราคาเก่า(0/1)] จากไฟล์ราคาในเครื่อง หรือ null
+   * คืน { action, amount (null = ยังไม่มีตัวเลข), source, stale, hidden, missing }
+   *  - repair/optional ใช้ "ราคาซ่อมที่ช่างใส่เอง" (ผู้ใช้ตัดสิน 2026-10-04)
+   *  - replace ใช้ราคาจาก pricelist
+   *  - missing = ต้องมีตัวเลขแต่ยังไม่มี (ห้ามรวมเป็น 0 เงียบ ๆ)
+   */
+  function costLine(item, evalCode, levels, price) {
+    if (evalCode === null) return { action: 'pending', amount: null, source: '', stale: false, hidden: false, missing: false };
+    const action = actionOf(itemRecommendation(evalCode, item, levels), levels);
+    const out = { action, amount: null, source: '', stale: false, hidden: !!item.hidePrice, missing: false };
+    if (action === 'none') { out.amount = 0; return out; }
+    if (action === 'unknown') return out;
+    if (action === 'repair' || action === 'optional') {
+      const has = item.repairPrice !== '' && item.repairPrice !== null && item.repairPrice !== undefined;
+      if (has) { out.amount = Number(item.repairPrice); out.source = 'ราคาซ่อม (ช่างใส่)'; }
+    } else if (price && price[1]) {
+      out.amount = Number(price[1]); out.source = 'pricelist ' + (price[2] || ''); out.stale = !!price[3];
+    }
+    out.missing = out.amount === null && !out.hidden;
+    return out;
+  }
+
+  /** ด่านก่อนออกรายงาน — lines = [{label, line}] ; opts.noPrices = ออกรายงานแบบไม่มีราคา */
+  function reportGate(lines, opts) {
+    const errors = [], warnings = [];
+    const pending = lines.filter(x => x.line.action === 'pending');
+    if (pending.length) errors.push(`ยังมีชิ้นที่ยังไม่ตรวจ ${pending.length} ชิ้น`);
+    const unknown = lines.filter(x => x.line.action === 'unknown');
+    if (unknown.length) errors.push(`คำแนะนำไม่รู้จัก ${unknown.length} ชิ้น: ${unknown.map(x => x.label).join(', ')}`);
+    if (!opts || !opts.noPrices) {
+      const miss = lines.filter(x => x.line.missing);
+      if (miss.length) errors.push(`ยังไม่มีราคา ${miss.length} ชิ้น (ใส่ราคาซ่อม / นำเข้าไฟล์ราคา / ติ๊ก "ไม่แสดงราคา"): ${miss.map(x => x.label).join(', ')}`);
+      const stale = lines.filter(x => x.line.stale && !x.line.hidden);
+      if (stale.length) warnings.push(`ใช้ราคาเก่า ${stale.length} ชิ้น (ติดป้าย "ราคาเก่า" ในรายงาน): ${stale.map(x => x.label).join(', ')}`);
+    }
+    return { ok: errors.length === 0, errors, warnings };
+  }
+
+  /** ยอดรวม: required = ซ่อม+เปลี่ยน ; optional = ซ่อมทางเลือก (ระดับ I) ; ไม่รวมชิ้นที่ซ่อนราคา */
+  function totals(lines) {
+    const t = { required: 0, optional: 0, hiddenCount: 0 };
+    for (const l of lines) {
+      if (l.hidden) { t.hiddenCount++; continue; }
+      if (l.amount === null) continue;
+      if (l.action === 'optional') t.optional += l.amount;
+      else if (l.action === 'repair' || l.action === 'replace') t.required += l.amount;
+    }
+    return t;
+  }
+
+  /** วันที่รูปแบบเดียวทั้งรายงาน (StayReady ปน พ.ศ./ค.ศ. และถอย 1 วันเพราะแปลง UTC) — รับ 'YYYY-MM-DD' ไม่แปลงเขตเวลา */
+  function fmtDate(iso, era) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    if (!m) return '';
+    const y = Number(m[1]) + (era === 'BE' ? 543 : 0);
+    return `${Number(m[3])}/${Number(m[2])}/${y}`;
+  }
+
   return {
     APP_VERSION, APP_DATE, APP_DEVELOPER, OK, CP, MS,
     normCode, isTestCustomer, defaultLevel, damageChoices, itemEvaluation, itemRecommendation,
-    validateItem, counts, trayStatus, canCloseAudit, isLocked, reopenAudit, templateFrom, estimateWarnings
+    validateItem, counts, trayStatus, canCloseAudit, isLocked, reopenAudit, templateFrom, estimateWarnings,
+    actionOf, costLine, reportGate, totals, fmtDate
   };
 });

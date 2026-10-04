@@ -75,3 +75,38 @@ input[type=checkbox] { width: 24px; height: 24px; min-height: 0; vertical-align:
   main { padding: 12px 12px 96px; } h1 { font-size: 20px; }
   .stick { gap: 6px; } .stick button { flex: 1 1 30%; min-height: 44px; padding: 0 8px; font-size: 14px; justify-content: center; }
 }
+
+/* ---------------- รายงาน (ขั้น D) — ใช้สีพื้นขาวเสมอ เพราะจะพิมพ์/บันทึก PDF */
+.report { position: relative; background: #fff; color: #111; border: 1px solid var(--line); border-radius: 8px; padding: 24px; margin-top: 16px; font-size: 14px; line-height: 1.45; }
+.report h2.r-title { font-size: 20px; margin: 10px 0 6px; } .report h3 { font-size: 16px; margin: 18px 0 6px; border-bottom: 2px solid #0b3d6b; padding-bottom: 2px; }
+.report h4 { font-size: 15px; margin: 14px 0 4px; } .report .small { font-size: 12px; color: #444; }
+.r-head { display: flex; justify-content: space-between; gap: 12px; border-bottom: 3px solid #0b3d6b; padding-bottom: 8px; }
+.r-ref { text-align: right; font-size: 12px; }
+.r-kv { border-collapse: collapse; margin: 6px 0; } .r-kv th { text-align: left; font-weight: 600; padding: 3px 12px 3px 0; color: #333; } .r-kv td { padding: 3px 16px 3px 0; }
+.r-tab { width: 100%; border-collapse: collapse; table-layout: fixed; } .r-tab th, .r-tab td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: top; word-wrap: break-word; }
+.r-tab th { background: #eef2f7; text-align: left; } .r-tab:not(.r-legend) th:first-child, .r-tab:not(.r-legend) td:first-child { width: 28px; }
+.r-tab .num { text-align: right; white-space: nowrap; } .r-tab tfoot td { background: #f6f8fb; font-weight: 600; }
+.r-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.r-bars { display: grid; gap: 4px; max-width: 560px; } .r-bar { display: grid; grid-template-columns: 170px 1fr 40px; align-items: center; gap: 8px; }
+.r-bar i { display: block; height: 14px; border-radius: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .r-bar b { text-align: right; }
+.r-pics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .r-pics img { width: 150px; height: 112px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px; }
+.r-stale { font-size: 11px; color: #8a5a00; border: 1px solid #c9a227; border-radius: 4px; padding: 0 4px; }
+.r-water { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 72px; font-weight: 800; color: rgba(198, 40, 40, .12); transform: rotate(-18deg); pointer-events: none; }
+.r-sign { display: flex; justify-content: flex-end; margin-top: 36px; text-align: center; } .r-foot { margin-top: 18px; font-size: 11px; color: #777; text-align: center; }
+.r-tray { break-inside: auto; } .r-tab tr { break-inside: avoid; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: #fff !important; }
+  .top, .foot, #banners, .noprint, .toast { display: none !important; }
+  main { padding: 0 !important; max-width: none; }
+  .report { border: 0; padding: 0; margin: 0; }
+  .r-water { position: fixed; }
+}
+/* สัดส่วนคอลัมน์ตารางรายถาด: # | รายการ | SN/LOT | ผลตรวจ | คำแนะนำ | ราคา */
+.r-tab:not(.r-legend) th:nth-child(2) { width: 38%; } .r-tab:not(.r-legend) th:nth-child(3) { width: 13%; }
+.r-tab:not(.r-legend) th:nth-child(4) { width: 15%; } .r-tab:not(.r-legend) th:nth-child(5) { width: 18%; }
+.r-tab:not(.r-legend) th:nth-child(6) { width: 13%; }
+/* ยอดรวมต้องอยู่ท้ายตารางครั้งเดียว — ค่าเริ่มของเบราว์เซอร์จะพิมพ์ tfoot ซ้ำทุกหน้า แล้วดูเหมือนยอดรวมจบที่หน้าแรก */
+@media print { .r-tab tfoot { display: table-row-group; } }
+.r-legend, .r-sign { break-inside: avoid; }
+.r-draft { color: #c62828; }
