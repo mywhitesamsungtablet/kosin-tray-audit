@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const APP_VERSION = '1.04';
+  const APP_VERSION = '1.05';
   const APP_DATE = '2026-10-04';
   const APP_DEVELOPER = 'KOSIE';
 
@@ -239,10 +239,19 @@
     return `${Number(m[3])}/${Number(m[2])}/${y}`;
   }
 
+  /** แถบ "มีเวอร์ชันใหม่": เทียบเวอร์ชันของหน้าที่เปิดอยู่ กับเวอร์ชันของ Service Worker ที่คุมเครื่องอยู่ (ชื่อแคช 'kta-X.YY')
+   *  แอปเปิดจากไฟล์ในเครื่องก่อนเสมอ (offline) → ครั้งแรกหลังขึ้นเว็บ ช่างได้หน้าเก่า ทั้งที่ไฟล์ใหม่โหลดเสร็จแล้ว
+   *  คืนเลขเวอร์ชันใหม่ ถ้าต่างจากที่เปิดอยู่ ; คืน '' ถ้าเหมือนกัน หรืออ่านชื่อแคชไม่ออก (ไม่แจ้งมั่ว) */
+  function updateAvailable(running, cacheName) {
+    const m = /^kta-(\d+\.\d+)$/.exec(String(cacheName || ''));
+    if (!m) return '';
+    return m[1] !== String(running) ? m[1] : '';
+  }
+
   return {
     APP_VERSION, APP_DATE, APP_DEVELOPER, OK, CP, MS,
     normCode, isTestCustomer, defaultLevel, damageChoices, itemEvaluation, itemRecommendation,
     validateItem, counts, trayStatus, canCloseAudit, isLocked, reopenAudit, templateFrom, estimateWarnings,
-    actionOf, costLine, reportGate, totals, fmtDate, withVat, VAT_RATE
+    actionOf, costLine, reportGate, totals, fmtDate, withVat, VAT_RATE, updateAvailable
   };
 });

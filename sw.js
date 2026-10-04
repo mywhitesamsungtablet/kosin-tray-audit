@@ -1,12 +1,13 @@
 /* KOSIN Tray Audit — Service Worker: เก็บไฟล์แอป + ข้อมูลหลักไว้ในเครื่อง ใช้ offline ได้
  * เปลี่ยนเวอร์ชันแอปเมื่อไหร่ ต้องเปลี่ยน CACHE ด้วย (ตรงกับ APP_VERSION ใน logic.js) ไม่งั้นเครื่องช่างค้างไฟล์เก่า
  */
-const CACHE = 'kta-1.04';
+const CACHE = 'kta-1.05';
 const FILES = ['./', 'index.html', 'styles.css', 'logic.js', 'db.js', 'xlsx.js', 'app.js', 'manifest.webmanifest',
   'data/master.json', 'data/products.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache:'reload' = ข้ามแคช HTTP ของเบราว์เซอร์ (GitHub Pages ให้เก็บ 10 นาที) ไม่งั้นแคชชื่อใหม่อาจได้ไฟล์เวอร์ชันเก่า
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -20,3 +21,5 @@ self.addEventListener('fetch', e => {
     return hit || (await net) || new Response('ออฟไลน์ และยังไม่มีไฟล์นี้ในเครื่อง', { status: 503 });
   }));
 });
+// หน้าแอปถามว่า SW ตัวที่คุมอยู่เป็นเวอร์ชันไหน → ถ้าไม่ตรงกับหน้าที่เปิด จะขึ้นแถบ "มีเวอร์ชันใหม่"
+self.addEventListener('message', e => { if (e.data === 'version' && e.source) e.source.postMessage({ type: 'version', cache: CACHE }); });

@@ -49,6 +49,8 @@ input[type=checkbox] { width: 24px; height: 24px; min-height: 0; vertical-align:
 .badge.gray { background: #8a939e; } .badge.pend { background: #ad1457; } .badge.ok { background: var(--ok); } .badge.lock { background: #455a64; }
 .banner { margin: 0; padding: 10px 16px; background: var(--warn); color: var(--warn-ink); font-size: 15px; border-bottom: 1px solid var(--line); }
 .banner.bad { background: #fde2e1; color: #8b1a1a; }
+.banner.new { background: #e3f2fd; color: #0b3d6b; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.banner.new button { color: #fff; background: #0b3d6b; border-color: #0b3d6b; }
 .err { background: #fde2e1; color: #8b1a1a; border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
 .err ul { margin: 4px 0 0 18px; padding: 0; }
 .results { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; margin-top: 6px; background: var(--card); }

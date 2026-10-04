@@ -6,6 +6,7 @@
   let M = null;          // master.json
   let P = null;          // products: { rows, byCode }
   let WHO = '';          // ชื่อผู้ตรวจ (ตั้งค่า)
+  let NEWVER = '';       // เวอร์ชันใหม่ที่โหลดเข้าเครื่องแล้ว แต่หน้านี้ยังเป็นตัวเก่า ('' = ไม่มี)
 
   // ---------------------------------------------------------------- utils
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -678,6 +679,7 @@
 
   async function banners() {
     const out = [];
+    if (NEWVER) out.push(`<p class="banner new">🔄 มีเวอร์ชันใหม่ v${NEWVER} (ตอนนี้ v${Logic.APP_VERSION}) — บันทึกงานที่ทำค้างก่อน แล้วกด <button id="doUpdate" class="sm pri">อัปเดตเลย</button></p>`);
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
     if (ios && !standalone) out.push('<p class="banner bad">⚠ iPhone/iPad: กดปุ่มแชร์ → "เพิ่มไปยังหน้าจอโฮม" แล้วเปิดจากไอคอน — ถ้าใช้ผ่าน Safari ตรง ๆ ข้อมูลอาจถูกลบเมื่อไม่ได้เปิดนาน</p>');
@@ -687,6 +689,24 @@
     const after = closed.filter(a => !lastBackupIso || a.closedAt > lastBackupIso);
     if (after.length) out.push(`<p class="banner">💾 มี audit ที่ปิดแล้วแต่ยังไม่ได้แบ็กอัป ${after.length} รายการ — <a href="#/settings">ส่งออกไฟล์แบ็กอัป</a></p>`);
     $('#banners').innerHTML = out.join('');
+    const up = $('#doUpdate'); if (up) up.onclick = () => location.reload();
+  }
+
+  /** แถบ "มีเวอร์ชันใหม่": ถาม SW ที่คุมเครื่องว่าเป็นเวอร์ชันไหน (ตอนเปิด + ทุกครั้งที่ SW ตัวใหม่เข้าคุม)
+   *  และสั่งเช็กไฟล์ใหม่ทุกครั้งที่กลับมาเปิดแอปจากพื้นหลัง — มือถือมักไม่โหลดหน้าใหม่เลยถ้าไม่ได้ปิดแอป */
+  function watchUpdates(reg) {
+    const sw = navigator.serviceWorker;
+    sw.addEventListener('message', e => {
+      if (!e.data || e.data.type !== 'version') return;
+      const v = Logic.updateAvailable(Logic.APP_VERSION, e.data.cache);
+      if (v !== NEWVER) { NEWVER = v; banners(); }
+    });
+    const ask = () => { if (sw.controller) sw.controller.postMessage('version'); };
+    sw.addEventListener('controllerchange', ask);
+    ask();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) reg.update().catch(() => {});
+    });
   }
 
   function loadPrices(d) {
@@ -702,7 +722,7 @@
     $('#foot').textContent = `KOSIN Tray Audit v${Logic.APP_VERSION} (${Logic.APP_DATE}) · พัฒนาโดย ${Logic.APP_DEVELOPER}`;
     await DB.open();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').then(watchUpdates).catch(e => console.warn('SW', e));
     const [m, p] = await Promise.all([fetch('data/master.json').then(r => r.json()), fetch('data/products.json').then(r => r.json())]);
     M = m;
     P = { rows: p.rows, byCode: new Map(p.rows.map(r => [Logic.normCode(r[0]), r])), price: new Map() };
