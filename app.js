@@ -9,7 +9,7 @@
 
   // ---------------------------------------------------------------- utils
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const baht = n => (n === null || n === undefined || n === '') ? '—' : Number(n).toLocaleString('th-TH') + ' บาท';
+  const baht = n => (n === null || n === undefined || n === '') ? '—' : Number(n).toLocaleString('th-TH', { minimumFractionDigits: Number(n) % 1 ? 2 : 0, maximumFractionDigits: 2 }) + ' บาท';
   // วันที่ตามเวลาเครื่อง (ไม่ใช้ toISOString ซึ่งเป็น UTC — ก่อน 07:00 เวลาไทยจะได้วันก่อนหน้า แบบเดียวกับบั๊กของ StayReady)
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const level = code => M.levels.find(l => l.code === code);
@@ -351,7 +351,7 @@
         <div class="card"><div class="rec">คำแนะนำ: ${badge(e)} <b>${esc(rec)}</b></div>
           <label>เปลี่ยนคำแนะนำ (ถ้าไม่เห็นด้วยกับระบบ)</label><select id="ro" ${dis}><option value="">— ใช้ตามระบบ —</option>${recs.map(r => `<option ${item.recOverride === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
           <div id="rowr" class="${item.recOverride ? '' : 'hidden'}"><label>เหตุผลที่เปลี่ยน *</label><input id="rr" value="${esc(item.recOverrideReason)}" ${dis}></div>
-          <label>ราคาซ่อม (บาท — ช่างใส่เอง ถ้าแนะนำซ่อม)</label><input id="rp" type="number" min="0" inputmode="decimal" value="${esc(item.repairPrice)}" ${dis}>
+          <label>ราคาซ่อม (บาท ไม่รวม VAT — ช่างใส่เอง ถ้าแนะนำซ่อม)</label><input id="rp" type="number" min="0" inputmode="decimal" value="${esc(item.repairPrice)}" ${dis}>
           <label class="check"><input type="checkbox" id="hp" ${item.hidePrice ? 'checked' : ''} ${dis}> ไม่แสดงราคาชิ้นนี้ในรายงาน</label>
           <div class="small" id="cost">${costHint(item, e)}</div></div>
         <div id="ie"></div>
@@ -490,16 +490,21 @@
       <h3>1. สรุปผล</h3><div class="r-bars">${M.levels.filter(l => evalCount[l.code]).map(l => `<div class="r-bar"><span>${esc(l.name)}</span>
         <i style="width:${Math.round(100 * evalCount[l.code] / Math.max(...Object.values(evalCount)))}%;background:${l.color}"></i><b>${evalCount[l.code]}</b></div>`).join('')}</div>
       <p class="small">ทราบปีผลิต ${R.mfgKnown} จาก ${R.k.total} ชิ้น</p>`;
-    if (!o.noPrices) h += `<table class="r-kv"><tr><th>ค่าใช้จ่ายที่แนะนำให้ดำเนินการ</th><td><b>${baht(R.tot.required)}</b></td></tr>
-        <tr><th>ค่าซ่อมทางเลือก (ระดับ I)</th><td>${baht(R.tot.optional)}</td></tr>
+    if (!o.noPrices) {
+      const v = Logic.withVat(R.tot.required), vo = Logic.withVat(R.tot.optional);
+      h += `<table class="r-kv"><tr><th>ค่าใช้จ่ายที่แนะนำให้ดำเนินการ (ก่อน VAT)</th><td class="num">${baht(v.net)}</td></tr>
+        <tr><th>ภาษีมูลค่าเพิ่ม ${Math.round(v.rate * 100)}%</th><td class="num">${baht(v.vat)}</td></tr>
+        <tr><th>รวมทั้งสิ้น</th><td class="num"><b>${baht(v.gross)}</b></td></tr>
+        <tr><th>ค่าซ่อมทางเลือก (ระดับ I) — ไม่รวมในยอดข้างบน</th><td class="num">${baht(vo.net)} + VAT ${baht(vo.vat)} = ${baht(vo.gross)}</td></tr>
         ${R.tot.hiddenCount ? `<tr><th>ชิ้นที่ไม่แสดงราคา</th><td>${R.tot.hiddenCount} ชิ้น</td></tr>` : ''}</table>
-        <p class="small">ราคาตามรายการราคาขาย KOSIN เดือน ${esc(P.priceMonth || '-')} · ค่าซ่อมตามที่ช่างประเมิน</p>`;
+        <p class="small">ราคาในตารางรายถาดเป็นราคาก่อน VAT · ราคาตามรายการราคาขาย KOSIN เดือน ${esc(P.priceMonth || '-')} · ค่าซ่อมตามที่ช่างประเมิน</p>`;
+    }
     h += `<h3>2. รายละเอียดรายถาด</h3>`;
     for (const t of R.tr.trays) {
       const rs = R.rows.filter(r => r.t.id === t.id);
       const sub = Logic.totals(rs.map(r => r.line));
       h += `<section class="r-tray"><h4>${esc(rs[0]?.d.name || '')} › ${esc(t.name)} <span class="small">Set ID ${esc(t.setId || '-')}</span></h4>${await pics(t.id)}
-        <table class="r-tab"><thead><tr><th>#</th><th>รหัส / รายการ</th><th>SN / LOT</th><th>ผลตรวจ</th><th>คำแนะนำ</th>${o.noPrices ? '' : '<th>ราคา</th>'}</tr></thead><tbody>`;
+        <table class="r-tab"><thead><tr><th>#</th><th>รหัส / รายการ</th><th>SN / LOT</th><th>ผลตรวจ</th><th>คำแนะนำ</th>${o.noPrices ? '' : '<th>ราคา (ก่อน VAT)</th>'}</tr></thead><tbody>`;
       for (const r of rs) {
         const lv = level(r.e);
         h += `<tr><td>${r.no}</td><td><b>${esc(r.i.productCode)}</b><br><span class="small">${esc(r.p ? (r.p[1] || '(ไม่มีคำอธิบาย)') : 'ไม่อยู่ในทะเบียน')}</span>
@@ -511,7 +516,7 @@
           ${o.noPrices ? '' : `<td class="num">${money(r.line)}</td>`}</tr>`;
         if (o.photos) for (const x of r.dm) { const ph = await pics(x.id); if (ph) h += `<tr class="r-dmgpic"><td></td><td colspan="${o.noPrices ? 4 : 5}"><span class="small">รูปตำหนิ: ${esc(M.damages[x.damageIdx])}</span>${ph}</td></tr>`; }
       }
-      h += `</tbody>${o.noPrices ? '' : `<tfoot><tr><td colspan="5">รวมที่แนะนำให้ดำเนินการ${sub.optional ? ` · ทางเลือก ${baht(sub.optional)}` : ''}</td><td class="num"><b>${baht(sub.required)}</b></td></tr></tfoot>`}</table></section>`;
+      h += `</tbody>${o.noPrices ? '' : `<tfoot><tr><td colspan="5">รวมที่แนะนำให้ดำเนินการ (ก่อน VAT)${sub.optional ? ` · ทางเลือก ${baht(sub.optional)}` : ''}</td><td class="num"><b>${baht(sub.required)}</b></td></tr></tfoot>`}</table></section>`;
     }
     h += `<h3>3. ความหมายของผลตรวจ</h3><table class="r-tab r-legend"><tbody>${M.levels.map(l => `<tr><td><span class="r-dot" style="background:${l.color}"></span>${esc(l.name)}</td><td>${esc(l.rec)}</td></tr>`).join('')}</tbody></table>
       <div class="r-sign"><div>ลงชื่อ ............................................<br>(${esc(R.a.inspector)})<br>ผู้ตรวจ</div></div>
@@ -526,11 +531,12 @@
       ['วันที่ตรวจ', Logic.fmtDate(R.a.plannedDate, o.era)], ['ผู้ตรวจ', R.a.inspector], ['เลขอ้างอิง', o.refNo], ['สถานะ audit', R.a.status],
       ['จำนวนถาด', R.tr.trays.length], ['ชิ้นทั้งหมด', R.k.total], ['ใช้ได้ดี', R.k.ok], ['ชำรุด', R.k.damaged], ['หาย', R.k.missing],
       ['ผ่านแบบมีเงื่อนไข', R.k.condPass], ['ยังไม่ตรวจ', R.k.pending], ['ทราบปีผลิต', `${R.mfgKnown} จาก ${R.k.total}`]]
-      .concat(pr ? [['ค่าใช้จ่ายที่แนะนำ (บาท)', R.tot.required], ['ค่าซ่อมทางเลือก (บาท)', R.tot.optional], ['ชิ้นที่ไม่แสดงราคา', R.tot.hiddenCount], ['ราคาตาม pricelist เดือน', P.priceMonth || '']] : [['ราคา', 'ไม่แสดงในรายงานนี้']])
+      .concat(pr ? [['ค่าใช้จ่ายที่แนะนำ ก่อน VAT (บาท)', Logic.withVat(R.tot.required).net], ['VAT 7% (บาท)', Logic.withVat(R.tot.required).vat],
+        ['รวมทั้งสิ้น (บาท)', Logic.withVat(R.tot.required).gross], ['ค่าซ่อมทางเลือก ก่อน VAT (บาท)', R.tot.optional], ['ชิ้นที่ไม่แสดงราคา', R.tot.hiddenCount], ['ราคาตาม pricelist เดือน', P.priceMonth || '']] : [['ราคา', 'ไม่แสดงในรายงานนี้']])
       .concat([['สร้างโดย', `KOSIN Tray Audit v${Logic.APP_VERSION} · ${Logic.APP_DEVELOPER}`]]);
     const head = ['แผนก', 'ถาด', 'Set ID', 'ลำดับ', 'รหัสสินค้า', 'คำอธิบาย', 'กลุ่มสินค้า', 'Serial', 'LOT', 'ปีผลิต', 'ตำหนิ', 'ผลตรวจ',
       'คำแนะนำของระบบ', 'คำแนะนำที่ใช้', 'เหตุผลที่ช่างเปลี่ยน', 'ผ่านแบบมีเงื่อนไข', 'ของหาย', 'การดำเนินการ']
-      .concat(pr ? ['ราคา (บาท)', 'ที่มาราคา', 'ราคาเก่า', 'ไม่แสดงราคา'] : []).concat(['หมายเหตุ', 'รหัสชิ้น']);
+      .concat(pr ? ['ราคาก่อน VAT (บาท)', 'ที่มาราคา', 'ราคาเก่า', 'ไม่แสดงราคา'] : []).concat(['หมายเหตุ', 'รหัสชิ้น']);
     const items = [head].concat(R.rows.map(r => [r.d.name, r.t.name, r.t.setId || '', r.no, r.i.productCode, r.p ? (r.p[1] || '(ไม่มีคำอธิบาย)') : '',
       M.groups[r.p ? r.p[2] : M.otherGroup], r.i.serial || '', r.i.lot || '', r.i.mfgYear ? Number(r.i.mfgYear) : '', dmgText(r.dm),
       level(r.e)?.name || 'ยังไม่ตรวจ', r.sysRec, r.rec, r.i.recOverrideReason || '', r.i.condPass || '', r.i.missing ? 'ใช่' : '',

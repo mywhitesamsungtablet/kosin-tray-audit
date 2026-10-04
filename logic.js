@@ -7,7 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const APP_VERSION = '1.02';
+  const APP_VERSION = '1.03';
   const APP_DATE = '2026-10-04';
   const APP_DEVELOPER = 'KOSIE';
 
@@ -219,6 +219,15 @@
     return t;
   }
 
+  /** ราคาใน pricelist ยังไม่รวม VAT (ผู้ใช้ยืนยัน 2026-10-04) ; ราคาซ่อมที่ช่างใส่ก็ใช้ฐานเดียวกัน (ป้ายช่องเขียนไว้)
+   *  คิด VAT จากยอดรวม (ไม่ใช่รายชิ้นแล้วบวก) ปัดทศนิยม 2 ตำแหน่ง */
+  const VAT_RATE = 0.07;
+  function withVat(net) {
+    const n = Math.round(Number(net || 0) * 100) / 100;
+    const vat = Math.round(n * VAT_RATE * 100) / 100;
+    return { net: n, vat, gross: Math.round((n + vat) * 100) / 100, rate: VAT_RATE };
+  }
+
   /** วันที่รูปแบบเดียวทั้งรายงาน (StayReady ปน พ.ศ./ค.ศ. และถอย 1 วันเพราะแปลง UTC) — รับ 'YYYY-MM-DD' ไม่แปลงเขตเวลา */
   function fmtDate(iso, era) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
@@ -231,6 +240,6 @@
     APP_VERSION, APP_DATE, APP_DEVELOPER, OK, CP, MS,
     normCode, isTestCustomer, defaultLevel, damageChoices, itemEvaluation, itemRecommendation,
     validateItem, counts, trayStatus, canCloseAudit, isLocked, reopenAudit, templateFrom, estimateWarnings,
-    actionOf, costLine, reportGate, totals, fmtDate
+    actionOf, costLine, reportGate, totals, fmtDate, withVat, VAT_RATE
   };
 });
